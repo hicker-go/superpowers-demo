@@ -85,14 +85,14 @@ func (h *OIDCHandler) UserInfo(c *gin.Context) {
 	ctx := c.Request.Context()
 	token := fosite.AccessTokenFromRequest(c.Request)
 	if token == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing or invalid authorization header"})
+		WriteErrorWithStatus(c, http.StatusUnauthorized, "missing_authorization", "missing or invalid authorization header")
 		return
 	}
 
 	session := new(fosite.DefaultSession)
 	_, ar, err := h.Provider.IntrospectToken(ctx, token, fosite.AccessToken, session, "openid")
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		WriteErrorWithStatus(c, http.StatusUnauthorized, "invalid_token", "token is invalid or expired")
 		return
 	}
 

@@ -41,6 +41,7 @@ type RegisterRouteConfig struct {
 // NewEngine creates a new Gin engine with HTML templates. Routes are registered by the router package.
 func NewEngine() *gin.Engine {
 	e := gin.Default()
+	e.Use(RequestIDMiddleware())
 	e.LoadHTMLGlob(filepath.Join("internal", "server", "http", "templates", "*.html"))
 	return e
 }
@@ -76,6 +77,16 @@ func RegisterFederationRoutes(e *gin.Engine, cfg *FederationRouteConfig) {
 	cbH := NewCallbackHandler(cfg.Service, cfg.Issuer)
 	e.GET("/auth/federation/:connector_id", fedH.Init)
 	e.GET("/auth/callback/:connector_id", cbH.GetCallback)
+}
+
+// RegisterHealthRoutes adds health check endpoints to the given engine.
+func RegisterHealthRoutes(e *gin.Engine, cfg *HealthRouteConfig) {
+	if cfg == nil {
+		return
+	}
+	h := NewHealthHandler(cfg.Client)
+	e.GET("/healthz", h.Healthz)
+	e.GET("/ready", h.Ready)
 }
 
 // RegisterRegisterRoutes adds registration endpoints to the given engine.
