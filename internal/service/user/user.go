@@ -2,9 +2,21 @@ package user
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"time"
 
 	"github.com/qinzj/superpowers-demo/internal/domain"
+	"github.com/qinzj/superpowers-demo/internal/infra/password"
 )
+
+// ErrUsernameTaken is returned when the username is already in use.
+var ErrUsernameTaken = errors.New("username already taken")
+
+// ErrWeakPassword is returned when the password does not meet strength requirements.
+var ErrWeakPassword = errors.New("password does not meet strength requirements")
+
+const minPasswordLen = 8
 
 // UserService provides user business operations.
 type UserService struct {
@@ -19,4 +31,32 @@ func NewUserService(repo UserRepository) *UserService {
 // Create persists a new user. The user's ID is populated after creation.
 func (s *UserService) Create(ctx context.Context, u *domain.User) error {
 	return s.repo.Create(ctx, u)
+}
+
+// Register creates a new user after validating username uniqueness and password strength.
+func (s *UserService) Register(ctx context.Context, username, email, pwd string) (*domain.User, error) {
+	existing, err := s.repo.ByUsername(ctx, username)
+	if err != nil {
+		return nil, fmt.Errorf("check username: %w", err)
+	}
+	if existing != nil {
+		return nil, ErrUsernameTaken
+	}
+	if len(pwd) < minPasswordLen {
+		return nil, ErrWeakPassword
+	}
+	hash, err := password.Hash(pwd)
+	if err != nil {
+		return nil, fmt.Errorf("hash password: %w", err)
+	}
+	u := &domain.User{
+		Username:     username,
+		Email:        email,
+		PasswordHash: hash,
+		CreatedAt:    time.Now(),
+	}
+	if err := s.Create(ctx, u); err != nil {
+		return nil, fmt.Errorf("create user: %w", err)
+	}
+	return u, nil
 }

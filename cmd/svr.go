@@ -13,18 +13,21 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/qinzj/superpowers-demo/ent"
 	_ "github.com/mattn/go-sqlite3" // sqlite3 driver for ent
-	"github.com/qinzj/superpowers-demo/internal/server/http/handler"
-	"github.com/qinzj/superpowers-demo/internal/service/oidc"
+	"github.com/qinzj/superpowers-demo/ent"
 	"github.com/qinzj/superpowers-demo/internal/router"
+	"github.com/qinzj/superpowers-demo/internal/server/http/handler"
+	"github.com/qinzj/superpowers-demo/internal/service/auth"
+	"github.com/qinzj/superpowers-demo/internal/service/oidc"
+	"github.com/qinzj/superpowers-demo/internal/service/user"
+	"github.com/qinzj/superpowers-demo/internal/storage"
 )
 
 // config keys
 const (
-	keyServerPort   = "server.port"
-	keyDatabaseDSN  = "database.dsn"
-	keyOIDCIssuer   = "oidc.issuer"
+	keyServerPort  = "server.port"
+	keyDatabaseDSN = "database.dsn"
+	keyOIDCIssuer  = "oidc.issuer"
 )
 
 func init() {
@@ -85,14 +88,26 @@ func runSvr(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("init OIDC config: %w", err)
 	}
 
-	storage := oidc.NewFositeStorage(client)
-	provider := oidc.NewOAuth2Provider(oidcCfg, storage)
+	oidcStorage := oidc.NewFositeStorage(client)
+	provider := oidc.NewOAuth2Provider(oidcCfg, oidcStorage)
+
+	userRepo := storage.NewUserRepository(client)
+	sessionRepo := storage.NewSessionRepository(client)
+	userSvc := user.NewUserService(userRepo)
+	authSvc := auth.NewAuthService(userRepo, sessionRepo)
 
 	engine := handler.NewEngine()
 	router.Setup(engine, &router.Config{
 		OIDC: &handler.OIDCRouteConfig{
 			Provider: provider,
 			Issuer:   issuer,
+			Auth:     authSvc,
+		},
+		Login: &handler.LoginRouteConfig{
+			Auth: authSvc,
+		},
+		Register: &handler.RegisterRouteConfig{
+			UserService: userSvc,
 		},
 	})
 

@@ -4,19 +4,37 @@
 package handler
 
 import (
+	"path/filepath"
+
 	"github.com/gin-gonic/gin"
 	"github.com/ory/fosite"
+
+	"github.com/qinzj/superpowers-demo/internal/service/auth"
+	"github.com/qinzj/superpowers-demo/internal/service/user"
 )
 
 // OIDCRouteConfig holds OIDC handler configuration for route registration.
 type OIDCRouteConfig struct {
 	Provider fosite.OAuth2Provider
 	Issuer   string
+	Auth     *auth.AuthService
 }
 
-// NewEngine creates a new Gin engine. Routes are registered by the router package.
+// LoginRouteConfig holds login handler configuration.
+type LoginRouteConfig struct {
+	Auth *auth.AuthService
+}
+
+// RegisterRouteConfig holds register handler configuration.
+type RegisterRouteConfig struct {
+	UserService *user.UserService
+}
+
+// NewEngine creates a new Gin engine with HTML templates. Routes are registered by the router package.
 func NewEngine() *gin.Engine {
-	return gin.Default()
+	e := gin.Default()
+	e.LoadHTMLGlob(filepath.Join("internal", "server", "http", "templates", "*.html"))
+	return e
 }
 
 // RegisterOIDCRoutes adds OIDC endpoints to the given engine.
@@ -24,9 +42,29 @@ func RegisterOIDCRoutes(e *gin.Engine, cfg *OIDCRouteConfig) {
 	if cfg == nil || cfg.Provider == nil {
 		return
 	}
-	h := NewOIDCHandler(cfg.Provider, cfg.Issuer)
+	h := NewOIDCHandler(cfg.Provider, cfg.Issuer, cfg.Auth)
 	e.GET("/.well-known/openid-configuration", h.WellKnown)
 	e.GET("/authorize", h.Authorize)
 	e.POST("/token", h.Token)
 	e.GET("/userinfo", h.UserInfo)
+}
+
+// RegisterLoginRoutes adds login endpoints to the given engine.
+func RegisterLoginRoutes(e *gin.Engine, cfg *LoginRouteConfig) {
+	if cfg == nil || cfg.Auth == nil {
+		return
+	}
+	h := NewLoginHandler(cfg.Auth)
+	e.GET("/login", h.GetLogin)
+	e.POST("/login", h.PostLogin)
+}
+
+// RegisterRegisterRoutes adds registration endpoints to the given engine.
+func RegisterRegisterRoutes(e *gin.Engine, cfg *RegisterRouteConfig) {
+	if cfg == nil || cfg.UserService == nil {
+		return
+	}
+	h := NewRegisterHandler(cfg.UserService)
+	e.GET("/register", h.RegisterGet)
+	e.POST("/register", h.RegisterPost)
 }
