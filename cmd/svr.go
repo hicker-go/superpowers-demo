@@ -107,6 +107,9 @@ func runSvr(cmd *cobra.Command, args []string) error {
 
 	engine := handler.NewEngine()
 	router.Setup(engine, &router.Config{
+		Health: &handler.HealthRouteConfig{
+			Client: client,
+		},
 		OIDC: &handler.OIDCRouteConfig{
 			Provider: provider,
 			Issuer:   issuer,
