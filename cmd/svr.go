@@ -15,6 +15,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3" // sqlite3 driver for ent
 	"github.com/qinzj/superpowers-demo/ent"
+	"github.com/qinzj/superpowers-demo/internal/infra/password"
 	"github.com/qinzj/superpowers-demo/internal/router"
 	"github.com/qinzj/superpowers-demo/internal/server/http/handler"
 	"github.com/qinzj/superpowers-demo/internal/service/auth"
@@ -149,9 +150,13 @@ func seedOAuth2Client(ctx context.Context, client *ent.Client) error {
 	if count > 0 {
 		return nil
 	}
+	secretHash, err := password.Hash("secret")
+	if err != nil {
+		return err
+	}
 	_, err = client.OAuth2Client.Create().
 		SetClientID("sso-demo").
-		SetClientSecret("secret").
+		SetClientSecret(secretHash).
 		SetRedirectUris([]string{"http://localhost:3000/callback"}).
 		Save(ctx)
 	return err
