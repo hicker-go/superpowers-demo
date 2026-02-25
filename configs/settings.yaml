@@ -2,7 +2,7 @@ server:
   port: 8888
 database:
   driver: sqlite3
-  dsn: file:./data/sso.db?cache=shared&mode=rwc
+  dsn: file:./data/sso.db?cache=shared&mode=rwc&_fk=1
 log:
   level: info
   output: stdout

@@ -4,41 +4,126 @@ Copyright © 2026 qinzj
 package cmd
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/qinzj/superpowers-demo/ent"
+	_ "github.com/mattn/go-sqlite3" // sqlite3 driver for ent
+	"github.com/qinzj/superpowers-demo/internal/server/http/handler"
+	"github.com/qinzj/superpowers-demo/internal/service/oidc"
+	"github.com/qinzj/superpowers-demo/internal/router"
 )
 
-// svrCmd represents the svr command
+// config keys
+const (
+	keyServerPort   = "server.port"
+	keyDatabaseDSN  = "database.dsn"
+	keyOIDCIssuer   = "oidc.issuer"
+)
+
+func init() {
+	rootCmd.AddCommand(svrCmd)
+}
+
 var svrCmd = &cobra.Command{
 	Use:   "svr",
 	Short: "Start the SSO OIDC server",
 	Long:  `Start the HTTP server for SSO OIDC login and authentication.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		v := viper.New()
-		v.SetConfigFile("configs/settings.yaml")
-		if err := v.ReadInConfig(); err != nil {
-			return fmt.Errorf("read config: %w", err)
-		}
-		cfg := v.AllSettings()
-		b, _ := json.MarshalIndent(cfg, "", "  ")
-		fmt.Println(string(b))
-		return nil
-	},
+	RunE:  runSvr,
 }
 
-func init() {
-	rootCmd.AddCommand(svrCmd)
+func runSvr(cmd *cobra.Command, args []string) error {
+	v := viper.New()
+	v.SetConfigFile("configs/settings.yaml")
+	if err := v.ReadInConfig(); err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
 
-	// Here you will define your flags and configuration settings.
+	port := v.GetInt(keyServerPort)
+	if port == 0 {
+		port = 8888
+	}
+	dsn := v.GetString(keyDatabaseDSN)
+	if dsn == "" {
+		return fmt.Errorf("database.dsn is required")
+	}
+	issuer := v.GetString(keyOIDCIssuer)
+	if issuer == "" {
+		issuer = fmt.Sprintf("http://localhost:%d", port)
+	}
 
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// svrCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// Ensure data dir exists for sqlite (dsn format: file:./data/sso.db?params)
+	if dir := dataDirFromDSN(dsn); dir != "" {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			return fmt.Errorf("create data dir: %w", err)
+		}
+	}
 
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// svrCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	client, err := ent.Open("sqlite3", dsn)
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	if err := client.Schema.Create(ctx); err != nil {
+		return fmt.Errorf("migrate schema: %w", err)
+	}
+
+	if err := seedOAuth2Client(ctx, client); err != nil {
+		return fmt.Errorf("seed OAuth2 client: %w", err)
+	}
+
+	oidcCfg, err := oidc.DefaultOIDCConfig(issuer)
+	if err != nil {
+		return fmt.Errorf("init OIDC config: %w", err)
+	}
+
+	storage := oidc.NewFositeStorage(client)
+	provider := oidc.NewOAuth2Provider(oidcCfg, storage)
+
+	engine := handler.NewEngine()
+	router.Setup(engine, &router.Config{
+		OIDC: &handler.OIDCRouteConfig{
+			Provider: provider,
+			Issuer:   issuer,
+		},
+	})
+
+	addr := fmt.Sprintf(":%d", port)
+	cmd.Printf("Starting server on http://localhost%s\n", addr)
+	return engine.Run(addr)
+}
+
+func dataDirFromDSN(dsn string) string {
+	const filePrefix = "file:"
+	if !strings.HasPrefix(dsn, filePrefix) {
+		return ""
+	}
+	pathPart := strings.SplitN(dsn[len(filePrefix):], "?", 2)[0]
+	return filepath.Dir(pathPart)
+}
+
+// seedOAuth2Client inserts a development OAuth2 client if none exist.
+// Client ID: sso-demo, secret: secret, redirect_uri: http://localhost:3000/callback
+func seedOAuth2Client(ctx context.Context, client *ent.Client) error {
+	count, err := client.OAuth2Client.Query().Count(ctx)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = client.OAuth2Client.Create().
+		SetClientID("sso-demo").
+		SetClientSecret("secret").
+		SetRedirectUris([]string{"http://localhost:3000/callback"}).
+		Save(ctx)
+	return err
 }
