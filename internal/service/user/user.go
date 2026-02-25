@@ -33,6 +33,14 @@ func (s *UserService) Create(ctx context.Context, u *domain.User) error {
 	return s.repo.Create(ctx, u)
 }
 
+// Delete removes the user and all their sessions. Idempotent: returns nil if user already deleted.
+func (s *UserService) Delete(ctx context.Context, userID string) error {
+	if err := s.repo.Delete(ctx, userID); err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+	return nil
+}
+
 // Register creates a new user after validating username uniqueness and password strength.
 func (s *UserService) Register(ctx context.Context, username, email, pwd string) (*domain.User, error) {
 	existing, err := s.repo.ByUsername(ctx, username)

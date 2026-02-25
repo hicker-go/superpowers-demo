@@ -1,6 +1,7 @@
 /*
 Copyright © 2026 qinzj
 */
+
 package cmd
 
 import (
@@ -12,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 
 	_ "github.com/mattn/go-sqlite3" // sqlite3 driver for ent
 	"github.com/qinzj/superpowers-demo/ent"
@@ -23,13 +25,15 @@ import (
 	"github.com/qinzj/superpowers-demo/internal/service/oidc"
 	"github.com/qinzj/superpowers-demo/internal/service/user"
 	"github.com/qinzj/superpowers-demo/internal/storage"
+	"github.com/qinzj/superpowers-demo/pkg/log"
 )
 
 // config keys
 const (
-	keyServerPort  = "server.port"
-	keyDatabaseDSN = "database.dsn"
-	keyOIDCIssuer  = "oidc.issuer"
+	keyServerPort     = "server.port"
+	keyDatabaseDriver = "database.driver"
+	keyDatabaseDSN    = "database.dsn"
+	keyOIDCIssuer     = "oidc.issuer"
 )
 
 func init() {
@@ -50,14 +54,35 @@ func runSvr(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("read config: %w", err)
 	}
 
+	var logCfg log.Config
+	if err := v.UnmarshalKey("log", &logCfg); err != nil {
+		return fmt.Errorf("unmarshal log config: %w", err)
+	}
+	if logCfg.File != "" {
+		if err := os.MkdirAll(filepath.Dir(logCfg.File), 0o750); err != nil {
+			return fmt.Errorf("create log dir: %w", err)
+		}
+	}
+	logger, err := log.New(&logCfg)
+	if err != nil {
+		return fmt.Errorf("init logger: %w", err)
+	}
+	defer logger.Sync()
+
 	port := v.GetInt(keyServerPort)
 	if port == 0 {
 		port = 8888
+	}
+	driver := v.GetString(keyDatabaseDriver)
+	if driver == "" {
+		driver = "sqlite3"
 	}
 	dsn := v.GetString(keyDatabaseDSN)
 	if dsn == "" {
 		return fmt.Errorf("database.dsn is required")
 	}
+
+	logger.Info("starting server", zap.Int(keyServerPort, port), zap.String(keyDatabaseDriver, driver), zap.String(keyDatabaseDSN, dsn))
 	issuer := v.GetString(keyOIDCIssuer)
 	if issuer == "" {
 		issuer = fmt.Sprintf("http://localhost:%d", port)
@@ -70,7 +95,7 @@ func runSvr(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	client, err := ent.Open("sqlite3", dsn)
+	client, err := ent.Open(driver, dsn)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
@@ -106,7 +131,7 @@ func runSvr(cmd *cobra.Command, args []string) error {
 		Issuer:  issuer,
 	}
 
-	engine := handler.NewEngine()
+	engine := handler.NewEngine(logger)
 	router.Setup(engine, &router.Config{
 		Health: &handler.HealthRouteConfig{
 			Client: client,
@@ -122,6 +147,10 @@ func runSvr(cmd *cobra.Command, args []string) error {
 		},
 		Register: &handler.RegisterRouteConfig{
 			UserService: userSvc,
+		},
+		Account: &handler.AccountRouteConfig{
+			UserService: userSvc,
+			Auth:        authSvc,
 		},
 		Federation: &fedCfg,
 	})

@@ -71,7 +71,7 @@ func testServer(t *testing.T) (*httptest.Server, *ent.Client) {
 		Issuer:  issuer,
 	}
 
-	engine := handler.NewEngine()
+	engine := handler.NewEngine(nil)
 	router.Setup(engine, &router.Config{
 		OIDC: &handler.OIDCRouteConfig{
 			Provider: provider,

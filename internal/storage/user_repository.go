@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/qinzj/superpowers-demo/ent"
+	"github.com/qinzj/superpowers-demo/ent/session"
 	"github.com/qinzj/superpowers-demo/ent/user"
 	"github.com/qinzj/superpowers-demo/internal/domain"
 )
@@ -61,6 +62,26 @@ func (r *UserRepository) ByEmail(ctx context.Context, email string) (*domain.Use
 		return nil, fmt.Errorf("query user by email: %w", err)
 	}
 	return entUserToDomain(entUser), nil
+}
+
+// Delete removes the user and all their sessions. Returns nil if user not found.
+func (r *UserRepository) Delete(ctx context.Context, userID string) error {
+	id, err := strconv.Atoi(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user id: %w", err)
+	}
+	_, err = r.client.Session.Delete().Where(session.HasUserWith(user.IDEQ(id))).Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("delete user sessions: %w", err)
+	}
+	err = r.client.User.DeleteOneID(id).Exec(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil // idempotent: already deleted
+		}
+		return fmt.Errorf("delete user: %w", err)
+	}
+	return nil
 }
 
 func entUserToDomain(e *ent.User) *domain.User {

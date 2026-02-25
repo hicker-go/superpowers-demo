@@ -5,13 +5,16 @@ package handler
 
 import (
 	"path/filepath"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ory/fosite"
+	"go.uber.org/zap"
 
 	"github.com/qinzj/superpowers-demo/internal/service/auth"
 	"github.com/qinzj/superpowers-demo/internal/service/federation"
 	"github.com/qinzj/superpowers-demo/internal/service/user"
+	"github.com/qinzj/superpowers-demo/pkg/log"
 )
 
 // OIDCRouteConfig holds OIDC handler configuration for route registration.
@@ -38,12 +41,52 @@ type RegisterRouteConfig struct {
 	UserService *user.UserService
 }
 
-// NewEngine creates a new Gin engine with HTML templates. Routes are registered by the router package.
-func NewEngine() *gin.Engine {
-	e := gin.Default()
+// AccountRouteConfig holds account handler configuration.
+type AccountRouteConfig struct {
+	UserService *user.UserService
+	Auth        *auth.AuthService
+}
+
+// NewEngine creates a new Gin engine with HTML templates and optional structured logging.
+// If logger is nil, request logging middleware is not added.
+func NewEngine(logger log.Logger) *gin.Engine {
+	e := gin.New()
+	e.Use(gin.Recovery())
 	e.Use(RequestIDMiddleware())
+	if logger != nil {
+		e.Use(ZapLoggerMiddleware(logger))
+	}
 	e.LoadHTMLGlob(filepath.Join("internal", "server", "http", "templates", "*.html"))
 	return e
+}
+
+// ZapLoggerMiddleware logs each request with method, path, status, request_id, and latency.
+func ZapLoggerMiddleware(l log.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		method := c.Request.Method
+		clientIP := c.ClientIP()
+		c.Next()
+		status := c.Writer.Status()
+		latency := time.Since(start)
+		reqID := GetRequestID(c)
+		fields := []zap.Field{
+			zap.String("request_id", reqID),
+			zap.String("method", method),
+			zap.String("path", path),
+			zap.Int("status", status),
+			zap.Duration("latency", latency),
+			zap.String("client_ip", clientIP),
+		}
+		if status >= 500 {
+			l.Error("request", fields...)
+		} else if status >= 400 {
+			l.Warn("request", fields...)
+		} else {
+			l.Info("request", fields...)
+		}
+	}
 }
 
 // RegisterOIDCRoutes adds OIDC endpoints to the given engine.
@@ -97,4 +140,14 @@ func RegisterRegisterRoutes(e *gin.Engine, cfg *RegisterRouteConfig) {
 	h := NewRegisterHandler(cfg.UserService)
 	e.GET("/register", h.RegisterGet)
 	e.POST("/register", h.RegisterPost)
+}
+
+// RegisterAccountRoutes adds account management endpoints (e.g. delete account).
+func RegisterAccountRoutes(e *gin.Engine, cfg *AccountRouteConfig) {
+	if cfg == nil || cfg.UserService == nil || cfg.Auth == nil {
+		return
+	}
+	h := NewAccountHandler(cfg.UserService, cfg.Auth)
+	e.GET("/account/delete", h.DeleteGet)
+	e.POST("/account/delete", h.DeletePost)
 }

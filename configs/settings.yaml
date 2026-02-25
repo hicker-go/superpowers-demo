@@ -1,12 +1,12 @@
 server:
   port: 8888
 database:
-  driver: sqlite3
+  driver: sqlite3   # sqlite3 | mysql | postgres
   dsn: file:./data/sso.db?cache=shared&mode=rwc&_fk=1
 log:
   level: info
-  output: stdout
-  file: ""
+  output: stdout       # stdout | file | both (console + file)
+  file: ""             # required when output=file or both
   max_size: 100
   max_age: 7
   max_backups: 3

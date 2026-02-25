@@ -20,12 +20,14 @@ Returns the OIDC discovery document with issuer, authorize, token, userinfo, and
 
 ### Authentication UI
 
-| Endpoint | Method | Purpose                |
-|----------|--------|------------------------|
-| /login   | GET    | Login page (HTML)      |
-| /login   | POST   | Submit credentials     |
-| /register| GET    | Registration page      |
-| /register| POST   | Create account         |
+| Endpoint        | Method | Purpose                       |
+|-----------------|--------|-------------------------------|
+| /login          | GET    | Login page (HTML)             |
+| /login          | POST   | Submit credentials            |
+| /register       | GET    | Registration page             |
+| /register       | POST   | Create account                |
+| /account/delete | GET    | Account deletion confirmation (requires login) |
+| /account/delete | POST   | Delete account (requires login, confirm with "yes") |
 
 ### Federation (Upstream IdP)
 

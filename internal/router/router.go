@@ -10,9 +10,10 @@ import (
 // Config holds route registration configuration.
 type Config struct {
 	Health     *handler.HealthRouteConfig
-	OIDC       *handler.OIDCRouteConfig
-	Login      *handler.LoginRouteConfig
-	Register   *handler.RegisterRouteConfig
+	OIDC      *handler.OIDCRouteConfig
+	Login     *handler.LoginRouteConfig
+	Register  *handler.RegisterRouteConfig
+	Account   *handler.AccountRouteConfig
 	Federation *handler.FederationRouteConfig
 }
 
@@ -32,6 +33,9 @@ func Setup(e *gin.Engine, cfg *Config) {
 	}
 	if cfg.Register != nil {
 		handler.RegisterRegisterRoutes(e, cfg.Register)
+	}
+	if cfg.Account != nil {
+		handler.RegisterAccountRoutes(e, cfg.Account)
 	}
 	if cfg.Federation != nil {
 		handler.RegisterFederationRoutes(e, cfg.Federation)
