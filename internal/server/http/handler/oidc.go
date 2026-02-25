@@ -11,6 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/ory/fosite"
 
+	"github.com/qinzj/superpowers-demo/internal/domain"
+	"github.com/qinzj/superpowers-demo/internal/service/auth"
 	"github.com/qinzj/superpowers-demo/internal/service/oidc"
 )
 
@@ -18,11 +20,12 @@ import (
 type OIDCHandler struct {
 	Provider fosite.OAuth2Provider
 	Issuer   string
+	Auth     *auth.AuthService
 }
 
-// NewOIDCHandler creates an OIDC handler with the given provider and issuer.
-func NewOIDCHandler(provider fosite.OAuth2Provider, issuer string) *OIDCHandler {
-	return &OIDCHandler{Provider: provider, Issuer: issuer}
+// NewOIDCHandler creates an OIDC handler with the given provider, issuer, and auth service.
+func NewOIDCHandler(provider fosite.OAuth2Provider, issuer string, authSvc *auth.AuthService) *OIDCHandler {
+	return &OIDCHandler{Provider: provider, Issuer: issuer, Auth: authSvc}
 }
 
 // WellKnown serves GET /.well-known/openid-configuration (OIDC discovery).
@@ -45,12 +48,12 @@ func (h *OIDCHandler) Authorize(c *gin.Context) {
 		return
 	}
 
-	if !hasSession(c) {
+	session := h.sessionFromContext(c)
+	if session == nil {
 		redirectToLogin(c, ar)
 		return
 	}
 
-	session := sessionFromContext(c)
 	response, err := h.Provider.NewAuthorizeResponse(ctx, ar, session)
 	if err != nil {
 		h.Provider.WriteAuthorizeError(ctx, c.Writer, ar, err)
@@ -97,17 +100,27 @@ func (h *OIDCHandler) UserInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, claims)
 }
 
-func hasSession(c *gin.Context) bool {
-	_, err := c.Cookie("sso_session")
-	return err == nil
+func (h *OIDCHandler) sessionFromContext(c *gin.Context) *fosite.DefaultSession {
+	if h.Auth == nil {
+		return nil
+	}
+	token, _ := c.Cookie(sessionCookieName)
+	if token == "" {
+		return nil
+	}
+	ctx := c.Request.Context()
+	user, err := h.Auth.GetSession(ctx, token)
+	if err != nil || user == nil {
+		return nil
+	}
+	return userToFositeSession(user)
 }
 
-func sessionFromContext(c *gin.Context) *fosite.DefaultSession {
-	// TODO(Task 11): Load session from cookie/storage.
-	return &fosite.DefaultSession{
-		Username: "placeholder",
-		Subject:  "placeholder",
-	}
+func userToFositeSession(u *domain.User) *fosite.DefaultSession {
+	s := &fosite.DefaultSession{}
+	s.SetSubject(u.ID)
+	s.Username = u.Username
+	return s
 }
 
 func redirectToLogin(c *gin.Context, ar fosite.AuthorizeRequester) {

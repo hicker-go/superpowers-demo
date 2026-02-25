@@ -20,7 +20,8 @@ func TestAuthService_ValidateCredentials(t *testing.T) {
 	defer client.Close()
 
 	userRepo := storage.NewUserRepository(client)
-	authSvc := NewAuthService(userRepo)
+	sessionRepo := storage.NewSessionRepository(client)
+	authSvc := NewAuthService(userRepo, sessionRepo)
 
 	ctx := context.Background()
 	hash, err := password.Hash("secret123")
