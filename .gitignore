@@ -13,6 +13,11 @@ worktrees/
 vendor/
 /data/
 
+# AI
+.ai-context/
+.claude/
+.cursor/
+
 # IDE
 .idea/
 .vscode/
