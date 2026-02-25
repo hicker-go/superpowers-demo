@@ -30,5 +30,14 @@
     <input type="password" id="password" name="password" required autocomplete="current-password">
     <button type="submit">Sign in</button>
   </form>
+  {{if .Connectors}}
+  <hr style="margin: 1.5rem 0;">
+  <p style="font-weight: 500; margin-bottom: 0.5rem;">企业 SSO</p>
+  <p style="font-size: 0.9rem; color: #666;">
+  {{range .Connectors}}
+  <a href="/auth/federation/{{.ID}}?client_id={{$.ClientID}}&redirect_uri={{$.RedirectURI}}&response_type={{$.ResponseType}}&scope={{$.Scope}}&state={{$.State}}">企业 SSO</a><br>
+  {{end}}
+  </p>
+  {{end}}
 </body>
 </html>

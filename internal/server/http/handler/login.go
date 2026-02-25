@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/qinzj/superpowers-demo/internal/service/auth"
+	"github.com/qinzj/superpowers-demo/internal/service/federation"
 )
 
 const sessionCookieName = "sso_session"
@@ -18,12 +19,17 @@ const sessionCookieMaxAge = 86400 // 24 hours in seconds
 
 // LoginHandler handles the login page and form submission.
 type LoginHandler struct {
-	Auth *auth.AuthService
+	Auth       *auth.AuthService
+	Federation *federation.FederationService
 }
 
-// NewLoginHandler creates a LoginHandler with the given auth service.
-func NewLoginHandler(a *auth.AuthService) *LoginHandler {
-	return &LoginHandler{Auth: a}
+// NewLoginHandler creates a LoginHandler with the given auth and federation services.
+func NewLoginHandler(a *auth.AuthService, fed FederationRouteConfig) *LoginHandler {
+	var fedSvc *federation.FederationService
+	if fed.Service != nil {
+		fedSvc = fed.Service
+	}
+	return &LoginHandler{Auth: a, Federation: fedSvc}
 }
 
 // LoginParams holds the OAuth2 authorize params passed to/from the login page.
@@ -43,6 +49,7 @@ type LoginForm struct {
 }
 
 // GetLogin renders the login page with OAuth2 params preserved as hidden fields.
+// If federation is configured and connectors exist, shows "企业 SSO" links.
 func (h *LoginHandler) GetLogin(c *gin.Context) {
 	params := LoginParams{
 		ClientID:     c.Query("client_id"),
@@ -51,7 +58,14 @@ func (h *LoginHandler) GetLogin(c *gin.Context) {
 		Scope:        c.Query("scope"),
 		State:        c.Query("state"),
 	}
-	c.HTML(http.StatusOK, "login.html", params)
+	data := loginTemplateData(params, "")
+	if h.Federation != nil {
+		connectors, _ := h.Federation.ListConnectors(c.Request.Context())
+		if len(connectors) > 0 {
+			data["Connectors"] = connectors
+		}
+	}
+	c.HTML(http.StatusOK, "login.html", data)
 }
 
 // PostLogin processes the login form, validates credentials, creates session, and redirects to /authorize.

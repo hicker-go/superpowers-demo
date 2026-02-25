@@ -10,6 +10,7 @@ import (
 	"github.com/ory/fosite"
 
 	"github.com/qinzj/superpowers-demo/internal/service/auth"
+	"github.com/qinzj/superpowers-demo/internal/service/federation"
 	"github.com/qinzj/superpowers-demo/internal/service/user"
 )
 
@@ -22,7 +23,14 @@ type OIDCRouteConfig struct {
 
 // LoginRouteConfig holds login handler configuration.
 type LoginRouteConfig struct {
-	Auth *auth.AuthService
+	Auth        *auth.AuthService
+	Federation  FederationRouteConfig
+}
+
+// FederationRouteConfig holds federation handler configuration.
+type FederationRouteConfig struct {
+	Service *federation.FederationService
+	Issuer  string
 }
 
 // RegisterRouteConfig holds register handler configuration.
@@ -54,9 +62,20 @@ func RegisterLoginRoutes(e *gin.Engine, cfg *LoginRouteConfig) {
 	if cfg == nil || cfg.Auth == nil {
 		return
 	}
-	h := NewLoginHandler(cfg.Auth)
+	h := NewLoginHandler(cfg.Auth, cfg.Federation)
 	e.GET("/login", h.GetLogin)
 	e.POST("/login", h.PostLogin)
+}
+
+// RegisterFederationRoutes adds federation init and callback endpoints.
+func RegisterFederationRoutes(e *gin.Engine, cfg *FederationRouteConfig) {
+	if cfg == nil || cfg.Service == nil {
+		return
+	}
+	fedH := NewFederationHandler(cfg.Service, cfg.Issuer)
+	cbH := NewCallbackHandler(cfg.Service, cfg.Issuer)
+	e.GET("/auth/federation/:connector_id", fedH.Init)
+	e.GET("/auth/callback/:connector_id", cbH.GetCallback)
 }
 
 // RegisterRegisterRoutes adds registration endpoints to the given engine.

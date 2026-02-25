@@ -11,4 +11,5 @@ import (
 type UserRepository interface {
 	Create(ctx context.Context, u *domain.User) error
 	ByUsername(ctx context.Context, username string) (*domain.User, error)
+	ByEmail(ctx context.Context, email string) (*domain.User, error)
 }

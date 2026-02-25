@@ -18,6 +18,7 @@ import (
 	"github.com/qinzj/superpowers-demo/internal/router"
 	"github.com/qinzj/superpowers-demo/internal/server/http/handler"
 	"github.com/qinzj/superpowers-demo/internal/service/auth"
+	"github.com/qinzj/superpowers-demo/internal/service/federation"
 	"github.com/qinzj/superpowers-demo/internal/service/oidc"
 	"github.com/qinzj/superpowers-demo/internal/service/user"
 	"github.com/qinzj/superpowers-demo/internal/storage"
@@ -93,8 +94,16 @@ func runSvr(cmd *cobra.Command, args []string) error {
 
 	userRepo := storage.NewUserRepository(client)
 	sessionRepo := storage.NewSessionRepository(client)
+	idpConnRepo := storage.NewIdPConnectorRepository(client)
 	userSvc := user.NewUserService(userRepo)
 	authSvc := auth.NewAuthService(userRepo, sessionRepo)
+	oidcAdapter := federation.NewOIDCClientAdapter()
+	fedSvc := federation.NewFederationService(idpConnRepo, oidcAdapter, userRepo, authSvc)
+
+	fedCfg := handler.FederationRouteConfig{
+		Service: fedSvc,
+		Issuer:  issuer,
+	}
 
 	engine := handler.NewEngine()
 	router.Setup(engine, &router.Config{
@@ -104,11 +113,13 @@ func runSvr(cmd *cobra.Command, args []string) error {
 			Auth:     authSvc,
 		},
 		Login: &handler.LoginRouteConfig{
-			Auth: authSvc,
+			Auth:       authSvc,
+			Federation: fedCfg,
 		},
 		Register: &handler.RegisterRouteConfig{
 			UserService: userSvc,
 		},
+		Federation: &fedCfg,
 	})
 
 	addr := fmt.Sprintf(":%d", port)

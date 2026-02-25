@@ -49,6 +49,20 @@ func (r *UserRepository) ByUsername(ctx context.Context, username string) (*doma
 	return entUserToDomain(entUser), nil
 }
 
+// ByEmail returns the user with the given email, or nil if not found.
+func (r *UserRepository) ByEmail(ctx context.Context, email string) (*domain.User, error) {
+	entUser, err := r.client.User.Query().
+		Where(user.EmailEQ(email)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("query user by email: %w", err)
+	}
+	return entUserToDomain(entUser), nil
+}
+
 func entUserToDomain(e *ent.User) *domain.User {
 	return &domain.User{
 		ID:           strconv.Itoa(e.ID),
