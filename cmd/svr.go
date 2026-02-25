@@ -4,23 +4,28 @@ Copyright © 2026 qinzj
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // svrCmd represents the svr command
 var svrCmd = &cobra.Command{
 	Use:   "svr",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("svr called")
+	Short: "Start the SSO OIDC server",
+	Long:  `Start the HTTP server for SSO OIDC login and authentication.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		v := viper.New()
+		v.SetConfigFile("configs/settings.yaml")
+		if err := v.ReadInConfig(); err != nil {
+			return fmt.Errorf("read config: %w", err)
+		}
+		cfg := v.AllSettings()
+		b, _ := json.MarshalIndent(cfg, "", "  ")
+		fmt.Println(string(b))
+		return nil
 	},
 }
 

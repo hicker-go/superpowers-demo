@@ -1,0 +1,14 @@
+server:
+  port: 8888
+database:
+  driver: sqlite3
+  dsn: file:./data/sso.db?cache=shared&mode=rwc
+log:
+  level: info
+  output: stdout
+  file: ""
+  max_size: 100
+  max_age: 7
+  max_backups: 3
+oidc:
+  issuer: http://localhost:8888
